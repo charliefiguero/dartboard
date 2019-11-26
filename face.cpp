@@ -20,20 +20,18 @@ using namespace cv;
 int detectAndDisplay( Mat frame );
 float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle);
 void findCorrectIOU(int i, int numberOfFaces);
+float calculateTpr();
+float calculateF1Score(int numberOfFaces);
 
-/** Global variables */
-String cascade_name = "frontalface.xml";
-CascadeClassifier cascade;
-
-// Ground truth faces array
+// Ground truth faces array -------------------------------------------------------------------------
 Rect dart0_ground;
 Rect dart1_ground;
 Rect dart2_ground;
 Rect dart3_ground;
 Rect dart4_ground[] = {Rect(334, 102, 151, 166)};
-Rect dart5_ground[] = {Rect(52, 139, 76, 73), Rect(45, 245, 79, 80), Rect(186, 200, 64, 85), Rect(250, 167, 56, 65),
-								Rect(294, 239, 56, 74), Rect(372, 185, 73, 69), Rect(429, 234, 53, 67), Rect(518, 177, 48, 64),
-								Rect(559, 246, 58, 67), Rect(646, 184, 59, 67), Rect(681, 242, 50, 71)};
+Rect dart5_ground[] = {Rect(52, 139, 76, 73), Rect(45, 245, 79, 80), Rect(186, 200, 64, 85),
+	Rect(250, 167, 56, 65), Rect(294, 239, 56, 74), Rect(372, 185, 73, 69), Rect(429, 234, 53, 67),
+	Rect(518, 177, 48, 64), Rect(559, 246, 58, 67), Rect(646, 184, 59, 67), Rect(681, 242, 50, 71)};
 Rect dart6_ground[] = {Rect(287, 116, 39, 42)};
 Rect dart7_ground[] = {Rect(349, 186, 68, 95)};
 Rect dart8_ground;
@@ -43,18 +41,27 @@ Rect dart11_ground[] = {Rect(320, 80, 67, 69)};
 Rect dart13_ground[] = {Rect(421, 125, 110, 129)};
 Rect dart14_ground[] = {Rect(467, 220, 81, 99), Rect(723, 188, 101, 101)};
 Rect dart15_ground;
+// --------------------------------------------------------------------------------------------------
 
-int lengthGT = sizeof(dart14_ground)/sizeof(dart14_ground[0]);
-Rect GTArray[sizeof(dart14_ground)/sizeof(dart14_ground[0])] = dart14_ground;
-float GT_IOU_values[sizeof(GTArray)/sizeof(GTArray[0])];
+/** Global variables */
+String cascade_name = "frontalface.xml";
+CascadeClassifier cascade;
+
+
+// these must be changed when using a different file
+int lengthGT = sizeof(dart5_ground)/sizeof(dart5_ground[0]);
+Rect GTArray[sizeof(dart5_ground)/sizeof(dart5_ground[0])] = dart5_ground;
+
+// key is the index of the face that has been chosen
+// value is the index of the GT which chose the face
 std::unordered_map<int, int> chosenFaces;
-
+// array to store the correct IOUs for each GT
+float GT_IOU_values[sizeof(GTArray)/sizeof(GTArray[0])];
 float ious[20][20];
-#include <unordered_map>
+
 /** @function main */
-int main( int argc, const char** argv )
-{
-       // 1. Read Input Image
+int main( int argc, const char** argv ) {
+  // 1. Read Input Image
 	Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
 
 	// 2. Load the Strong Classifier in a structure called `Cascade'
@@ -63,83 +70,101 @@ int main( int argc, const char** argv )
 	// 3. Detect Faces and Display Result
 	int numberOfFaces = detectAndDisplay( frame );
 
-	// find TPR
-
-	// checks if the ground truth has an associated face and which face has been chosen
-	// bool hasFace[100];
-	// int indexOfChosenFace[100];
-	// for (int i = 0; i < 100; i++) {
-	// 	hasFace[i] = false;
-	// 	indexOfChosenFace = 0;
-	// }
-
-	// key, value pair
-	// key is the index of the face that has been chosen
-	// value is the index of the GT which chose the face
-	//std::vector<float> GT_IOU_values;
-
-
 	// make sure each GT has only 1 associated face
 	for (int i = 0; i < lengthGT; i++) {
 		findCorrectIOU(i, numberOfFaces);
 	}
 
-	for (int i = 0; i < lengthGT; i++) {
-		std::cout << i << ", " << GT_IOU_values[i] << std::endl;
-	}
-	// make sure each face has only 1 associated GT
+	// for (int i = 0; i < lengthGT; i++) {
+	// 	std::cout << i << ", " << GT_IOU_values[i] << std::endl;
+	// }
 
-	// threshhold ious
+	// find TPR
+	float tpr = calculateTpr();
+	float f1Score = calculateF1Score(numberOfFaces);
+	//std::cout << tpr << std::endl;
+	std::cout << f1Score << std::endl;
 
 	// 4. Save Result Image
 	imwrite( "detected.jpg", frame );
 
-	for (int i = 0; i < lengthGT; i++) {
-		for (int j = 0; j < numberOfFaces; j++) {
-			std::cout << ious[i][j] << " ";
-		}
-		std::cout << std::endl;
-	}
+	// for (int i = 0; i < lengthGT; i++) {
+	// 	for (int j = 0; j < numberOfFaces; j++) {
+	// 		std::cout << ious[i][j] << " ";
+	// 	}
+	// 	std::cout << std::endl;
+	// }
 
 	return 0;
 }
 
+// recursive function which checks for the largest IOU and then checks the other ground truths
+// to ensure two detected rectangles don't share the same ground truth.
 void findCorrectIOU(int i, int numberOfFaces) {
-	float largestIOU = 0;
-	int indexOfLargestIOU = 0; //corresponds to chosen face
+	float chosenFaceIOU = 0;
+	int indexOfChosenFace = 0; //corresponds to chosen face
 
+	// chooses the face with the largest IOU
 	for (int j = 0; j < numberOfFaces; j++) {
-		if (ious[i][j] > largestIOU) {
-			largestIOU = ious[i][j];
-			indexOfLargestIOU = j;
+		if (ious[i][j] > chosenFaceIOU) {
+			chosenFaceIOU = ious[i][j];
+			indexOfChosenFace = j;
 		}
 	}
 
 	// check for collisions
-	if (largestIOU == 0) {
+	if (chosenFaceIOU == 0) { // no overlapping rectangle
 		GT_IOU_values[i] = 0;
 	}
-	else if (chosenFaces.count(indexOfLargestIOU) == 0) {
-		chosenFaces.insert({indexOfLargestIOU, i});
-		GT_IOU_values[i] = largestIOU;
+	else if (chosenFaces.count(indexOfChosenFace) == 0) { // no other ground truth uses this detected rectangle
+		chosenFaces.insert({indexOfChosenFace, i});
+		GT_IOU_values[i] = chosenFaceIOU;
 	}
-	else { // there was a collision
-		int previousGroundTruth = chosenFaces[indexOfLargestIOU];
-		if (GT_IOU_values[previousGroundTruth] < largestIOU) {
-			ious[previousGroundTruth][indexOfLargestIOU] = 0;
-			chosenFaces[indexOfLargestIOU] = i;
+	else { // there was a collision (another ground truth uses this rectangle)
+		int previousGroundTruth = chosenFaces[indexOfChosenFace];
+		if (GT_IOU_values[previousGroundTruth] < chosenFaceIOU) {
+			ious[previousGroundTruth][indexOfChosenFace] = 0;
+			chosenFaces[indexOfChosenFace] = i;
 
 			findCorrectIOU(previousGroundTruth, numberOfFaces);
-			GT_IOU_values[i] = largestIOU;
+			GT_IOU_values[i] = chosenFaceIOU;
+		}
+		else {
+			ious[i][indexOfChosenFace] = 0;
+			findCorrectIOU(i, numberOfFaces);
 		}
 	}
 }
 
+// cull the younglings
+float calculateTpr() {
+	int truePositives = 0;
+	for (int i = 0; i < lengthGT; i++) {
+		if (GT_IOU_values[i] > 0.55) truePositives++;
+	}
+	return truePositives/lengthGT;
+}
 
+float calculateF1Score(int numberOfFaces) {
+	int truePositives = 0;
+	for (int i = 0; i < lengthGT; i++) {
+		if (GT_IOU_values[i] > 0.55) truePositives++;
+	}
+
+	int falseNegatives = lengthGT - truePositives;
+
+ 	float precision = (float) truePositives / (float) numberOfFaces;
+	float recall = (float) truePositives / ((float) truePositives + (float) falseNegatives);
+	float f1Score = 0;
+
+	// if statement prevents division
+	if (precision != 0) f1Score = (2 * ((precision * recall) / (precision + recall)) );
+
+	return f1Score;
+}
 
 /** @function detectAndDisplay */
-int detectAndDisplay( Mat frame )
-{
+int detectAndDisplay( Mat frame ) {
 	std::vector<Rect> faces;
 	Mat frame_gray;
 
@@ -175,13 +200,13 @@ int detectAndDisplay( Mat frame )
 	return faces.size();
 }
 
-	// Calculates the intersection over union of the two rectangles
-	float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
-		float x_overlap = max(0, min(detectedRectangle.x + detectedRectangle.width, groundTruthRectangle.x + groundTruthRectangle.width) - max(detectedRectangle.x, groundTruthRectangle.x));
-		float y_overlap = max(0, min(detectedRectangle.y + detectedRectangle.height, groundTruthRectangle.y + groundTruthRectangle.height) - max(detectedRectangle.y, groundTruthRectangle.y));
+// Calculates the intersection over union of the two rectangles
+float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
+	float x_overlap = max(0, min(detectedRectangle.x + detectedRectangle.width, groundTruthRectangle.x + groundTruthRectangle.width) - max(detectedRectangle.x, groundTruthRectangle.x));
+	float y_overlap = max(0, min(detectedRectangle.y + detectedRectangle.height, groundTruthRectangle.y + groundTruthRectangle.height) - max(detectedRectangle.y, groundTruthRectangle.y));
 
-		float intersection = x_overlap * y_overlap;
-		float thisUnion = (detectedRectangle.width * detectedRectangle.height) + (groundTruthRectangle.width * groundTruthRectangle.height) - intersection;
+	float intersection = x_overlap * y_overlap;
+	float thisUnion = (detectedRectangle.width * detectedRectangle.height) + (groundTruthRectangle.width * groundTruthRectangle.height) - intersection;
 
-		return (intersection / thisUnion);
-	}
+	return (intersection / thisUnion);
+}
