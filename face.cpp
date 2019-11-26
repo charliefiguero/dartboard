@@ -11,12 +11,15 @@
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include <unordered_map>
 
 using namespace std;
 using namespace cv;
 
 /** Function Headers */
-void detectAndDisplay( Mat frame );
+int detectAndDisplay( Mat frame );
+float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle);
+void findCorrectIOU(int i, int numberOfFaces);
 
 /** Global variables */
 String cascade_name = "frontalface.xml";
@@ -41,6 +44,13 @@ Rect dart13_ground[] = {Rect(421, 125, 110, 129)};
 Rect dart14_ground[] = {Rect(467, 220, 81, 99), Rect(723, 188, 101, 101)};
 Rect dart15_ground;
 
+int lengthGT = sizeof(dart14_ground)/sizeof(dart14_ground[0]);
+Rect GTArray[sizeof(dart14_ground)/sizeof(dart14_ground[0])] = dart14_ground;
+float GT_IOU_values[sizeof(GTArray)/sizeof(GTArray[0])];
+std::unordered_map<int, int> chosenFaces;
+
+float ious[20][20];
+#include <unordered_map>
 /** @function main */
 int main( int argc, const char** argv )
 {
@@ -51,16 +61,84 @@ int main( int argc, const char** argv )
 	if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
 
 	// 3. Detect Faces and Display Result
-	detectAndDisplay( frame );
+	int numberOfFaces = detectAndDisplay( frame );
+
+	// find TPR
+
+	// checks if the ground truth has an associated face and which face has been chosen
+	// bool hasFace[100];
+	// int indexOfChosenFace[100];
+	// for (int i = 0; i < 100; i++) {
+	// 	hasFace[i] = false;
+	// 	indexOfChosenFace = 0;
+	// }
+
+	// key, value pair
+	// key is the index of the face that has been chosen
+	// value is the index of the GT which chose the face
+	//std::vector<float> GT_IOU_values;
+
+
+	// make sure each GT has only 1 associated face
+	for (int i = 0; i < lengthGT; i++) {
+		findCorrectIOU(i, numberOfFaces);
+	}
+
+	for (int i = 0; i < lengthGT; i++) {
+		std::cout << i << ", " << GT_IOU_values[i] << std::endl;
+	}
+	// make sure each face has only 1 associated GT
+
+	// threshhold ious
 
 	// 4. Save Result Image
 	imwrite( "detected.jpg", frame );
 
+	for (int i = 0; i < lengthGT; i++) {
+		for (int j = 0; j < numberOfFaces; j++) {
+			std::cout << ious[i][j] << " ";
+		}
+		std::cout << std::endl;
+	}
+
 	return 0;
 }
 
+void findCorrectIOU(int i, int numberOfFaces) {
+	float largestIOU = 0;
+	int indexOfLargestIOU = 0; //corresponds to chosen face
+
+	for (int j = 0; j < numberOfFaces; j++) {
+		if (ious[i][j] > largestIOU) {
+			largestIOU = ious[i][j];
+			indexOfLargestIOU = j;
+		}
+	}
+
+	// check for collisions
+	if (largestIOU == 0) {
+		GT_IOU_values[i] = 0;
+	}
+	else if (chosenFaces.count(indexOfLargestIOU) == 0) {
+		chosenFaces.insert({indexOfLargestIOU, i});
+		GT_IOU_values[i] = largestIOU;
+	}
+	else { // there was a collision
+		int previousGroundTruth = chosenFaces[indexOfLargestIOU];
+		if (GT_IOU_values[previousGroundTruth] < largestIOU) {
+			ious[previousGroundTruth][indexOfLargestIOU] = 0;
+			chosenFaces[indexOfLargestIOU] = i;
+
+			findCorrectIOU(previousGroundTruth, numberOfFaces);
+			GT_IOU_values[i] = largestIOU;
+		}
+	}
+}
+
+
+
 /** @function detectAndDisplay */
-void detectAndDisplay( Mat frame )
+int detectAndDisplay( Mat frame )
 {
 	std::vector<Rect> faces;
 	Mat frame_gray;
@@ -72,8 +150,15 @@ void detectAndDisplay( Mat frame )
 	// 2. Perform Viola-Jones Object Detection
 	cascade.detectMultiScale( frame_gray, faces, 1.1, 1, 0|CV_HAAR_SCALE_IMAGE, Size(50, 50), Size(500,500) );
 
-  // 3. Print number of Faces found
+  // 3. Print number of faces found
 	std::cout << faces.size() << std::endl;
+
+	// populate ious table
+	for (int i = 0; i < lengthGT; i++) {
+		for (int j = 0; j < faces.size(); j++) {
+			ious[i][j] = calculateIOU(faces[j], GTArray[i]);
+		}
+	}
 
   // 4. Draw box around faces found
 	for( int i = 0; i < faces.size(); i++ ) {
@@ -81,13 +166,22 @@ void detectAndDisplay( Mat frame )
 		}
 
  // Draws the ground truth rectangles in red
-	Rect *array = dart5_ground;
-	for ( int i = 0; i < sizeof(array)/sizeof(array[0]); i++) {
-		rectangle(frame, Point(array[i].x, array[i].y), Point(array[i].x + array[i].width, array[i].y + array[i].height), Scalar( 0, 0, 255 ), 2);
+	for ( int i = 0; i < lengthGT; i++) {
+		rectangle(frame, Point(GTArray[i].x, GTArray[i].y),
+							Point(GTArray[i].x + GTArray[i].width,
+						  GTArray[i].y + GTArray[i].height), Scalar( 0, 0, 255 ), 2);
 	}
+
+	return faces.size();
 }
 
 	// Calculates the intersection over union of the two rectangles
 	float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
-		return 1.0;
+		float x_overlap = max(0, min(detectedRectangle.x + detectedRectangle.width, groundTruthRectangle.x + groundTruthRectangle.width) - max(detectedRectangle.x, groundTruthRectangle.x));
+		float y_overlap = max(0, min(detectedRectangle.y + detectedRectangle.height, groundTruthRectangle.y + groundTruthRectangle.height) - max(detectedRectangle.y, groundTruthRectangle.y));
+
+		float intersection = x_overlap * y_overlap;
+		float thisUnion = (detectedRectangle.width * detectedRectangle.height) + (groundTruthRectangle.width * groundTruthRectangle.height) - intersection;
+
+		return (intersection / thisUnion);
 	}
