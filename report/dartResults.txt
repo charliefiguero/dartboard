@@ -1,0 +1,20 @@
+Dartboard detection w/ threshold = 0.45
+
+	tpr	f1Score		detected
+
+Dart0:	1	0.285714	6
+dart1:	1	0.25		7
+dart2:	0	0		5
+dart3:	1	0.4		4
+dart4:	1	0.2		9
+dart5:	0	0		8
+dart6:	0	0		9
+dart7:	1	0.111111	17
+dart8:	0	0.08		23	
+dart9:	1	0.181818	10
+dart10:	0	0.0769231	23
+dart11:	1	0.5		3
+dart12:	1	0.4		4
+dart13:	0	0		9
+dart14:	0	0		38
+dart15:	2	1		0.666667

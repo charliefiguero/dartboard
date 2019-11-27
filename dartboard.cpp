@@ -24,23 +24,22 @@ float calculateTpr();
 float calculateF1Score(int numberOfFaces);
 
 // Ground truth faces array -------------------------------------------------------------------------
-Rect dart0_ground;
-Rect dart1_ground;
-Rect dart2_ground;
-Rect dart3_ground;
-Rect dart4_ground[] = {Rect(334, 102, 151, 166)};
-Rect dart5_ground[] = {Rect(52, 139, 76, 73), Rect(45, 245, 79, 80), Rect(186, 200, 64, 85),
-	Rect(250, 167, 56, 65), Rect(294, 239, 56, 74), Rect(372, 185, 73, 69), Rect(429, 234, 53, 67),
-	Rect(518, 177, 48, 64), Rect(559, 246, 58, 67), Rect(646, 184, 59, 67), Rect(681, 242, 50, 71)};
-Rect dart6_ground[] = {Rect(287, 116, 39, 42)};
-Rect dart7_ground[] = {Rect(349, 186, 68, 95)};
-Rect dart8_ground;
-Rect dart9_ground[] = {Rect(85, 206, 114, 140)};
-Rect dart10_ground;
-Rect dart11_ground[] = {Rect(320, 80, 67, 69)};
-Rect dart13_ground[] = {Rect(421, 125, 110, 129)};
-Rect dart14_ground[] = {Rect(467, 220, 81, 99), Rect(723, 188, 101, 101)};
-Rect dart15_ground;
+Rect dart0_ground[] = {Rect(449, 16, 151, 177)};
+Rect dart1_ground[] = {Rect(196, 128, 198, 190)};
+Rect dart2_ground[] = {Rect(106, 96, 86, 87)};
+Rect dart3_ground[] = {Rect(330, 150, 60, 66)};
+Rect dart4_ground[] = {Rect(202, 94, 183, 205)};
+Rect dart5_ground[] = {Rect(434, 143, 97, 11)};
+Rect dart6_ground[] = {Rect(214, 119, 62, 62)};
+Rect dart7_ground[] = {Rect(253, 172, 144, 144)};
+Rect dart8_ground[] = {Rect(64, 252, 67, 88), Rect(850, 216, 103, 120)};
+Rect dart9_ground[] = {Rect(203, 61, 231, 217)};
+Rect dart10_ground[] = {Rect(96, 105, 91, 109), Rect(585, 128, 56, 84), Rect(919, 148, 32, 66)};
+Rect dart11_ground[] = {Rect(175, 105, 62, 67)};
+Rect dart12_ground[] = {Rect(150, 76, 68, 139)};
+Rect dart13_ground[] = {Rect(273, 128, 129, 124)};
+Rect dart14_ground[] = {Rect(121, 103, 125, 124), Rect(989, 96, 120, 123)};
+Rect dart15_ground[] = {Rect(151, 59, 138, 139)};
 // --------------------------------------------------------------------------------------------------
 
 /** Global variables */
@@ -49,8 +48,10 @@ CascadeClassifier cascade;
 
 
 // these must be changed when using a different file
-int lengthGT = sizeof(dart14_ground)/sizeof(dart14_ground[0]);
-Rect GTArray[sizeof(dart14_ground)/sizeof(dart14_ground[0])] = dart14_ground;
+string saveImageLocation = "report/dart15_detected.jpg";
+int lengthGT = sizeof(dart15_ground)/sizeof(dart15_ground[0]);
+Rect GTArray[sizeof(dart15_ground)/sizeof(dart15_ground[0])] = dart15_ground;
+float thresholdForCalculations = 0.45;
 
 // key is the index of the face that has been chosen
 // value is the index of the GT which chose the face
@@ -83,10 +84,12 @@ int main( int argc, const char** argv ) {
 	float tpr = calculateTpr();
 	float f1Score = calculateF1Score(numberOfFaces);
 	//std::cout << tpr << std::endl;
-	std::cout << f1Score << std::endl;
+  std::cout << "tpr: " << tpr << std::endl;
+	std::cout << "f1Score: " << f1Score << std::endl;
 
 	// 4. Save Result Image
 	imwrite( "detected.jpg", frame );
+  imwrite( saveImageLocation, frame );
 
 	// for (int i = 0; i < lengthGT; i++) {
 	// 	for (int j = 0; j < numberOfFaces; j++) {
@@ -140,7 +143,7 @@ void findCorrectIOU(int i, int numberOfFaces) {
 float calculateTpr() {
 	int truePositives = 0;
 	for (int i = 0; i < lengthGT; i++) {
-		if (GT_IOU_values[i] > 0.55) truePositives++;
+		if (GT_IOU_values[i] > thresholdForCalculations) truePositives++;
 	}
 	return truePositives/lengthGT;
 }
@@ -148,7 +151,7 @@ float calculateTpr() {
 float calculateF1Score(int numberOfFaces) {
 	int truePositives = 0;
 	for (int i = 0; i < lengthGT; i++) {
-		if (GT_IOU_values[i] > 0.55) truePositives++;
+		if (GT_IOU_values[i] > thresholdForCalculations) truePositives++;
 	}
 
 	int falseNegatives = lengthGT - truePositives;
