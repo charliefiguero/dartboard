@@ -12,6 +12,7 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <unordered_map>
+#include <math.h>
 
 using namespace std;
 using namespace cv;
@@ -22,6 +23,7 @@ float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle);
 void findCorrectIOU(int i, int numberOfFaces);
 float calculateTpr();
 float calculateF1Score(int numberOfFaces);
+void hough_transform(Mat img, int thresholdHough, int lowThresholdCanny, int highThresholdCanny);
 
 // Ground truth faces array -------------------------------------------------------------------------
 Rect dart0_ground[] = {Rect(449, 16, 151, 177)};
@@ -46,11 +48,10 @@ Rect dart15_ground[] = {Rect(151, 59, 138, 139)};
 String cascade_name = "dartcascade/cascade.xml";
 CascadeClassifier cascade;
 
-
 // these must be changed when using a different file
-string saveImageLocation = "report/dart15_detected.jpg";
-int lengthGT = sizeof(dart15_ground)/sizeof(dart15_ground[0]);
-Rect GTArray[sizeof(dart15_ground)/sizeof(dart15_ground[0])] = dart15_ground;
+//string saveImageLocation = "report/dart15_detected.jpg";
+int lengthGT = sizeof(dart10_ground)/sizeof(dart10_ground[0]);
+Rect GTArray[sizeof(dart10_ground)/sizeof(dart10_ground[0])] = dart10_ground;
 float thresholdForCalculations = 0.45;
 
 // key is the index of the face that has been chosen
@@ -64,6 +65,7 @@ float ious[20][20];
 int main( int argc, const char** argv ) {
   // 1. Read Input Image
 	Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
+	hough_transform(frame, 200, 50, 200);
 
 	// 2. Load the Strong Classifier in a structure called `Cascade'
 	if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
@@ -89,7 +91,7 @@ int main( int argc, const char** argv ) {
 
 	// 4. Save Result Image
 	imwrite( "detected.jpg", frame );
-  imwrite( saveImageLocation, frame );
+  //imwrite( saveImageLocation, frame );
 
 	// for (int i = 0; i < lengthGT; i++) {
 	// 	for (int j = 0; j < numberOfFaces; j++) {
@@ -191,7 +193,7 @@ int detectAndDisplay( Mat frame ) {
   // 4. Draw box around faces found
 	for( int i = 0; i < faces.size(); i++ ) {
 		rectangle(frame, Point(faces[i].x, faces[i].y), Point(faces[i].x + faces[i].width, faces[i].y + faces[i].height), Scalar( 0, 255, 0 ), 2);
-		}
+	}
 
  // Draws the ground truth rectangles in red
 	for ( int i = 0; i < lengthGT; i++) {
@@ -212,4 +214,60 @@ float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
 	float thisUnion = (detectedRectangle.width * detectedRectangle.height) + (groundTruthRectangle.width * groundTruthRectangle.height) - intersection;
 
 	return (intersection / thisUnion);
+}
+
+// Performs hough transform on an image with a given threshold
+void hough_transform(Mat img, int thresholdHough, int lowThresholdCanny, int highThresholdCanny) {
+
+	Mat gray_img, canny_img;
+	Mat lines_img = img.clone();
+	Mat hough_img(1236, 180, CV_32FC1);
+
+	// Create grey scale image
+	cvtColor( img, gray_img, CV_BGR2GRAY );
+
+	// Blur image for more effective sobel convolution
+	blur( gray_img, canny_img, Size(3,3) );
+
+	// Perform canny (sobel, followed by thinning edges, followed by hysteresis thresholding)
+	// resulting image gives pixel values on prominent lines as 255 and other pixels as 0
+	Canny( canny_img, canny_img, lowThresholdCanny, highThresholdCanny, 3 );
+
+	// Perform hough transform to find most likely edges based on pixel votes
+	float radian_conversion = M_PI / (float) 180;
+
+
+  // Creates houghspace for image on hough_img
+	for ( int i = 0; i < canny_img.rows; i++ ) {
+		for( int j = 0; j < canny_img.cols; j++ ) {
+			if (canny_img.at<uchar>(i, j) == 255) {
+				for (int theta = 0; theta < 180; theta++) {
+					int rho = abs((j * cos(  (theta) * radian_conversion  ) ) + (i * sin( (theta) * radian_conversion)));
+					hough_img.at<float>(rho, theta) += 1;
+				}
+			}
+		}
+	}
+
+
+	// Draws lines detected in hough space onto image
+	for ( int i = 0; i < hough_img.rows; i++ ) {
+		for( int j = 0; j < hough_img.cols; j++ ) {
+			if (hough_img.at<float>(i, j) > thresholdHough) {
+				float rho = i, theta = j;
+			  Point pt1, pt2;
+			  double a = cos(theta), b = sin(theta);
+			  double x0 = a*rho, y0 = b*rho;
+			  pt1.x = cvRound(x0 + 1000*(-b));
+			  pt1.y = cvRound(y0 + 1000*(a));
+			  pt2.x = cvRound(x0 - 1000*(-b));
+			  pt2.y = cvRound(y0 - 1000*(a));
+			  line( lines_img, pt1, pt2, Scalar(0,0,255), 3, CV_AA);
+			}
+		}
+	}
+
+	imwrite("lol.jpg", hough_img);
+	imwrite("lol2.jpg", lines_img);
+
 }
