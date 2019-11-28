@@ -5,12 +5,15 @@
 /////////////////////////////////////////////////////////////////////////////
 
 // header inclusion
-#include <stdio.h>
+#include "hough.h"
+
 #include "opencv2/objdetect/objdetect.hpp"
 #include "opencv2/opencv.hpp"
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+
+#include <stdio.h>
 #include <unordered_map>
 #include <math.h>
 
@@ -50,8 +53,8 @@ CascadeClassifier cascade;
 
 // these must be changed when using a different file
 //string saveImageLocation = "report/dart15_detected.jpg";
-int lengthGT = sizeof(dart10_ground)/sizeof(dart10_ground[0]);
-Rect GTArray[sizeof(dart10_ground)/sizeof(dart10_ground[0])] = dart10_ground;
+int lengthGT = sizeof(dart14_ground)/sizeof(dart14_ground[0]);
+Rect GTArray[sizeof(dart14_ground)/sizeof(dart14_ground[0])] = dart14_ground;
 float thresholdForCalculations = 0.45;
 
 // key is the index of the face that has been chosen
@@ -65,7 +68,7 @@ float ious[20][20];
 int main( int argc, const char** argv ) {
   // 1. Read Input Image
 	Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
-	hough_transform(frame, 200, 50, 200);
+	hough_transform(frame, 70, 400, 600);
 
 	// 2. Load the Strong Classifier in a structure called `Cascade'
 	if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
@@ -86,7 +89,7 @@ int main( int argc, const char** argv ) {
 	float tpr = calculateTpr();
 	float f1Score = calculateF1Score(numberOfFaces);
 	//std::cout << tpr << std::endl;
-  std::cout << "tpr: " << tpr << std::endl;
+  	std::cout << "tpr: " << tpr << std::endl;
 	std::cout << "f1Score: " << f1Score << std::endl;
 
 	// 4. Save Result Image
@@ -216,58 +219,3 @@ float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
 	return (intersection / thisUnion);
 }
 
-// Performs hough transform on an image with a given threshold
-void hough_transform(Mat img, int thresholdHough, int lowThresholdCanny, int highThresholdCanny) {
-
-	Mat gray_img, canny_img;
-	Mat lines_img = img.clone();
-	Mat hough_img(1236, 180, CV_32FC1);
-
-	// Create grey scale image
-	cvtColor( img, gray_img, CV_BGR2GRAY );
-
-	// Blur image for more effective sobel convolution
-	blur( gray_img, canny_img, Size(3,3) );
-
-	// Perform canny (sobel, followed by thinning edges, followed by hysteresis thresholding)
-	// resulting image gives pixel values on prominent lines as 255 and other pixels as 0
-	Canny( canny_img, canny_img, lowThresholdCanny, highThresholdCanny, 3 );
-
-	// Perform hough transform to find most likely edges based on pixel votes
-	float radian_conversion = M_PI / (float) 180;
-
-
-  // Creates houghspace for image on hough_img
-	for ( int i = 0; i < canny_img.rows; i++ ) {
-		for( int j = 0; j < canny_img.cols; j++ ) {
-			if (canny_img.at<uchar>(i, j) == 255) {
-				for (int theta = 0; theta < 180; theta++) {
-					int rho = abs((j * cos(  (theta) * radian_conversion  ) ) + (i * sin( (theta) * radian_conversion)));
-					hough_img.at<float>(rho, theta) += 1;
-				}
-			}
-		}
-	}
-
-
-	// Draws lines detected in hough space onto image
-	for ( int i = 0; i < hough_img.rows; i++ ) {
-		for( int j = 0; j < hough_img.cols; j++ ) {
-			if (hough_img.at<float>(i, j) > thresholdHough) {
-				float rho = i, theta = j;
-			  Point pt1, pt2;
-			  double a = cos(theta), b = sin(theta);
-			  double x0 = a*rho, y0 = b*rho;
-			  pt1.x = cvRound(x0 + 1000*(-b));
-			  pt1.y = cvRound(y0 + 1000*(a));
-			  pt2.x = cvRound(x0 - 1000*(-b));
-			  pt2.y = cvRound(y0 - 1000*(a));
-			  line( lines_img, pt1, pt2, Scalar(0,0,255), 3, CV_AA);
-			}
-		}
-	}
-
-	imwrite("lol.jpg", hough_img);
-	imwrite("lol2.jpg", lines_img);
-
-}
