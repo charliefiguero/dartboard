@@ -13,6 +13,7 @@ float radian_conversion = M_PI / (float) 180;
 // 	// Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
 // 	Mat frame = imread(argv[1]);
 // 	Mat canny_img;
+//  Mat draw_image = frame.clone(); 
 
 // 	getCanny(frame, canny_img, 50, 200);
 // 	hough_lines(frame, canny_img, 140);
@@ -23,11 +24,15 @@ float radian_conversion = M_PI / (float) 180;
 // }
 
 // Performs hough transform on an image with a given threshold
-void hough_lines(Mat img, Mat canny_img, int thresholdHough, Rect focus_area) {
+void hough_lines(Mat img, Mat canny_img, Mat lines_img, int thresholdHough, Rect focus_area) {
 
 	int max_rho = hypot(img.rows, img.cols);
 	Mat hough_img(2*max_rho, 180, CV_32FC1); // This img contains hough space
-  	Mat lines_img = img.clone(); // Detected lines are drawn to this img
+
+	int xStart = focus_area.x;
+	int xEnd = focus_area.x + focus_area.width;
+	int yStart = focus_area.y;
+	int yEnd = focus_area.y + focus_area.height;
 
 	//"We cannot get out. We cannot get out. They have taken the bridge and Second Hall. Frár and Lóni and Náli fell there bravely while the rest retreated to Mazarbul.
 	//We still hold the chamber but hope is fading now. Óin’s party went five days ago but today only four returned.
@@ -35,8 +40,8 @@ void hough_lines(Mat img, Mat canny_img, int thresholdHough, Rect focus_area) {
   	//They are coming.
 
     // Creates houghspace for image on hough_img
-	for ( int i = 0; i < canny_img.rows; i++ ) {
-		for( int j = 0; j < canny_img.cols; j++ ) { //loop over pixels in img
+	for ( int i = yStart; i <= yEnd; i++ ) {
+		for( int j = xStart; j < xEnd; j++ ) { //loop over pixels in img
 
 			if ((int) canny_img.at<uchar>(i, j) == 255) { // if canny detects an edge here
 
@@ -48,7 +53,7 @@ void hough_lines(Mat img, Mat canny_img, int thresholdHough, Rect focus_area) {
 		}
 	}
 
-	imwrite("result_hough_space.jpg", hough_img);
+	//imwrite("result_hough_space.jpg", hough_img);
 
 	// Go through every pixel in hough
 	// If above threshhold add to pixel in corresponding houghspace
@@ -70,29 +75,25 @@ void hough_lines(Mat img, Mat canny_img, int thresholdHough, Rect focus_area) {
 			}
 		}
 	}
-	
-	imwrite("hough_result.jpg", lines_img);
 }
 
-void hough_circles(Mat img, Mat canny_img, int thresholdVal, int minRadius, int maxRadius, Rect focus_area) {
-	Mat directionImg, magnitudeImg;
-	getGradient(img, directionImg, magnitudeImg);
-	Mat circles_img = img.clone();
+int hough_circles(Mat img, Mat canny_img, Mat circles_img, Mat directionImg, int thresholdVal, int minRadius, int maxRadius, Rect focus_area) {
 
-	// for (int i = 0; i < img.rows; i++) {
-	// 	for (int j = 0; j < img.cols; j++) {
-	// 		cout << directionImg.at<float>(i, j) << endl;
-	// 	}
-	// }
+	int circleCount = 0;
+
+	int xStart = focus_area.x;
+	int xEnd = focus_area.x + focus_area.width;
+	int yStart = focus_area.y;
+	int yEnd = focus_area.y + focus_area.height;
 
 	int size[3] = {img.rows + (2 * maxRadius), img.cols + (2 * maxRadius), maxRadius - minRadius + 1}; // adding border padding of maxRadius
 	Mat circle_centres(3, size, CV_32F, Scalar(0));
 
-	Mat flattenedHough((img.rows + (2 * maxRadius)), img.cols + (2 * maxRadius), CV_32FC1);
+	//Mat flattenedHough((img.rows + (2 * maxRadius)), img.cols + (2 * maxRadius), CV_32FC1);
 	
 	// Creates houghspace for image on hough_img
-	for ( int i = 0; i < canny_img.rows; i++ ) {
-		for( int j = 0; j < canny_img.cols; j++ ) { //loop over pixels in img
+	for ( int i = yStart; i <= yEnd; i++ ) {
+		for( int j = xStart; j <= xEnd; j++ ) { //loop over pixels in img
 			if ((int) canny_img.at<uchar>(i, j) == 255) { // if canny detects an edge here
 
 				for (int r = minRadius; r <= maxRadius; r++) {
@@ -104,22 +105,21 @@ void hough_circles(Mat img, Mat canny_img, int thresholdVal, int minRadius, int 
 					//if (y0Neg > img.cols + (2 * maxRadius)) cout << "x: " << x0Neg << endl;
 					circle_centres.at<float>(y0Pos, x0Pos, (r - minRadius))++; // indexing is offset by the minimum radius
 					circle_centres.at<float>(y0Neg, x0Neg, (r - minRadius))++;	
-					flattenedHough.at<float>(y0Pos, x0Pos)++;	
-					flattenedHough.at<float>(y0Neg, x0Neg)++;	
+					// flattenedHough.at<float>(y0Pos, x0Pos)++;	
+					// flattenedHough.at<float>(y0Neg, x0Neg)++;	
 				}
 			}
 		}
 	}
 
-	// Mat hough_img(2*max_rho, 180, CV_32FC1);
-
-	imwrite("hough_circles.jpg", circle_centres);
-	imwrite("hough_space.jpg", flattenedHough);
+	//imwrite("hough_circles.jpg", circle_centres);
+	//imwrite("hough_space.jpg", flattenedHough);
 
 	for ( int i = 0; i < img.rows + (2 * maxRadius); i++ ) {
 		for( int j = 0; j < img.cols + (2 * maxRadius); j++ ) { 
 			for (int r = minRadius; r <= maxRadius; r++) {
 				if (circle_centres.at<float>(i, j, r - minRadius) > thresholdVal) {
+					circleCount++;
 					Point centre = Point(j - maxRadius, i - maxRadius);
 					circle(circles_img, centre, r, Scalar( 0, 255, 0 ));
 				}
@@ -127,9 +127,8 @@ void hough_circles(Mat img, Mat canny_img, int thresholdVal, int minRadius, int 
 			}
 			
 		}
-	}	
-	imwrite("circles.jpg", circles_img);		
-
+	}			
+	return circleCount;
 }
 
 void getCanny( Mat &inputImg, Mat &output, int lowThreshold, int highThreshold) {
@@ -140,7 +139,7 @@ void getCanny( Mat &inputImg, Mat &output, int lowThreshold, int highThreshold) 
 	blur( gray_img, canny_img, Size(3,3) ); // Blur image for more effective sobel convolution
 	Canny( canny_img, output, lowThreshold, highThreshold, 3 ); 	// resulting image gives pixel values on prominent lines as 255 and other pixels as 0
 
-	imwrite("canny.jpg", output);
+	//imwrite("canny.jpg", output);
 }
 
 void getGradient(Mat &input, Mat &directionOutput, Mat &magnitudeOutput)
@@ -151,8 +150,8 @@ void getGradient(Mat &input, Mat &directionOutput, Mat &magnitudeOutput)
     Sobel(gray_img, dx, CV_32F, 1, 0);
     Sobel(gray_img, dy, CV_32F, 0, 1);
 
-    imwrite("dx.jpg", dx);
-    imwrite("dy.jpg", dy);
+    //imwrite("dx.jpg", dx);
+    //imwrite("dy.jpg", dy);
 
     cartToPolar(dx, dy, magnitudeOutput, directionOutput); // output is assigned to angle
 }
