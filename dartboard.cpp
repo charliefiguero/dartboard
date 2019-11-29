@@ -52,7 +52,7 @@ String cascade_name = "dartcascade/cascade.xml";
 CascadeClassifier cascade;
 
 // these must be changed when using a different file
-//string saveImageLocation = "report/dart15_detected.jpg";
+// string saveImageLocation = "report/dart15_detected.jpg";
 int lengthGT = sizeof(dart14_ground)/sizeof(dart14_ground[0]);
 Rect GTArray[sizeof(dart14_ground)/sizeof(dart14_ground[0])] = dart14_ground;
 float thresholdForCalculations = 0.45;
@@ -68,7 +68,7 @@ float ious[20][20];
 int main( int argc, const char** argv ) {
   // 1. Read Input Image
 	Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
-	hough_transform(frame, 70, 400, 600);
+	hough_transform(frame, 100, 400, 600);
 
 	// 2. Load the Strong Classifier in a structure called `Cascade'
 	if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
@@ -81,10 +81,6 @@ int main( int argc, const char** argv ) {
 		findCorrectIOU(i, numberOfFaces);
 	}
 
-	// for (int i = 0; i < lengthGT; i++) {
-	// 	std::cout << i << ", " << GT_IOU_values[i] << std::endl;
-	// }
-
 	// find TPR
 	float tpr = calculateTpr();
 	float f1Score = calculateF1Score(numberOfFaces);
@@ -94,14 +90,7 @@ int main( int argc, const char** argv ) {
 
 	// 4. Save Result Image
 	imwrite( "detected.jpg", frame );
-  //imwrite( saveImageLocation, frame );
-
-	// for (int i = 0; i < lengthGT; i++) {
-	// 	for (int j = 0; j < numberOfFaces; j++) {
-	// 		std::cout << ious[i][j] << " ";
-	// 	}
-	// 	std::cout << std::endl;
-	// }
+    //imwrite( saveImageLocation, frame );
 
 	return 0;
 }
@@ -121,7 +110,7 @@ void findCorrectIOU(int i, int numberOfFaces) {
 	}
 
 	// check for collisions
-	if (chosenFaceIOU == 0) { // no overlapping rectangle
+	if (chosenFaceIOU == 0) { // no corresponding ground truth was found
 		GT_IOU_values[i] = 0;
 	}
 	else if (chosenFaces.count(indexOfChosenFace) == 0) { // no other ground truth uses this detected rectangle
@@ -142,6 +131,17 @@ void findCorrectIOU(int i, int numberOfFaces) {
 			findCorrectIOU(i, numberOfFaces);
 		}
 	}
+}
+
+// Calculates the intersection over union of the two rectangles
+float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
+	float x_overlap = max(0, min(detectedRectangle.x + detectedRectangle.width, groundTruthRectangle.x + groundTruthRectangle.width) - max(detectedRectangle.x, groundTruthRectangle.x));
+	float y_overlap = max(0, min(detectedRectangle.y + detectedRectangle.height, groundTruthRectangle.y + groundTruthRectangle.height) - max(detectedRectangle.y, groundTruthRectangle.y));
+
+	float intersection = x_overlap * y_overlap;
+	float thisUnion = (detectedRectangle.width * detectedRectangle.height) + (groundTruthRectangle.width * groundTruthRectangle.height) - intersection;
+
+	return (intersection / thisUnion);
 }
 
 // cull the younglings
@@ -193,12 +193,12 @@ int detectAndDisplay( Mat frame ) {
 		}
 	}
 
-  // 4. Draw box around faces found
+    // 4. Draw box around faces found
 	for( int i = 0; i < faces.size(); i++ ) {
 		rectangle(frame, Point(faces[i].x, faces[i].y), Point(faces[i].x + faces[i].width, faces[i].y + faces[i].height), Scalar( 0, 255, 0 ), 2);
 	}
 
- // Draws the ground truth rectangles in red
+    // Draws the ground truth rectangles in red
 	for ( int i = 0; i < lengthGT; i++) {
 		rectangle(frame, Point(GTArray[i].x, GTArray[i].y),
 							Point(GTArray[i].x + GTArray[i].width,
@@ -206,16 +206,5 @@ int detectAndDisplay( Mat frame ) {
 	}
 
 	return faces.size();
-}
-
-// Calculates the intersection over union of the two rectangles
-float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
-	float x_overlap = max(0, min(detectedRectangle.x + detectedRectangle.width, groundTruthRectangle.x + groundTruthRectangle.width) - max(detectedRectangle.x, groundTruthRectangle.x));
-	float y_overlap = max(0, min(detectedRectangle.y + detectedRectangle.height, groundTruthRectangle.y + groundTruthRectangle.height) - max(detectedRectangle.y, groundTruthRectangle.y));
-
-	float intersection = x_overlap * y_overlap;
-	float thisUnion = (detectedRectangle.width * detectedRectangle.height) + (groundTruthRectangle.width * groundTruthRectangle.height) - intersection;
-
-	return (intersection / thisUnion);
 }
 
