@@ -27,6 +27,7 @@ void findCorrectIOU(int i, int numberOfFaces);
 float calculateTpr();
 float calculateF1Score(int numberOfFaces);
 void hough_lines(Mat img, int thresholdHough, int lowThresholdCanny, int highThresholdCanny);
+void violaJones(Mat frame, vector<Rect> &faces);
 
 // Ground truth faces array -------------------------------------------------------------------------
 Rect dart0_ground[] = {Rect(449, 16, 151, 177)};
@@ -53,8 +54,8 @@ CascadeClassifier cascade;
 
 // these must be changed when using a different file
 // string saveImageLocation = "report/dart15_detected.jpg";
-int lengthGT = sizeof(dart6_ground)/sizeof(dart6_ground[0]);
-Rect GTArray[sizeof(dart6_ground)/sizeof(dart6_ground[0])] = dart6_ground;
+int lengthGT = sizeof(dart14_ground)/sizeof(dart14_ground[0]);
+Rect GTArray[sizeof(dart14_ground)/sizeof(dart14_ground[0])] = dart14_ground;
 float thresholdForCalculations = 0.45;
 
 // key is the index of the face that has been chosen
@@ -66,12 +67,8 @@ float ious[20][20];
 
 /** @function main */
 int main( int argc, const char** argv ) {
-  // 1. Read Input Image
+  	// 1. Read Input Image
 	Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
-	Mat canny_img;
-
-	getCanny(frame, canny_img, 50, 100);
-	hough_lines(frame, canny_img, 200);
 
 	// 2. Load the Strong Classifier in a structure called `Cascade'
 	if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
@@ -147,7 +144,7 @@ float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
 	return (intersection / thisUnion);
 }
 
-// cull the younglings
+// Cull the younglings
 float calculateTpr() {
 	int truePositives = 0;
 	for (int i = 0; i < lengthGT; i++) {
@@ -178,16 +175,20 @@ float calculateF1Score(int numberOfFaces) {
 /** @function detectAndDisplay */
 int detectAndDisplay( Mat frame ) {
 	std::vector<Rect> faces;
-	Mat frame_gray;
+	Mat canny_img;
 
-	// 1. Prepare Image by turning it into Grayscale and normalising lighting
-	cvtColor( frame, frame_gray, CV_BGR2GRAY );
-	equalizeHist( frame_gray, frame_gray );
+	getCanny(frame, canny_img, 50, 100);
+	violaJones(frame, faces);
 
-	// 2. Perform Viola-Jones Object Detection
-	cascade.detectMultiScale( frame_gray, faces, 1.6, 1, 0|CV_HAAR_SCALE_IMAGE, Size(50, 50), Size(500,500) );
+	for (int i = 0; i < faces.size(); i++) {
+		hough_circles(frame, canny_img, 20, 10, 300, faces[i]);
+		hough_lines(frame, canny_img, 200, faces[i]);
+	}
+	
 
-  // 3. Print number of faces found
+	
+
+  	// Print number of faces found
 	std::cout << faces.size() << std::endl;
 
 	// populate ious table
@@ -197,7 +198,7 @@ int detectAndDisplay( Mat frame ) {
 		}
 	}
 
-    // 4. Draw box around faces found
+    // Draw box around faces found
 	for( int i = 0; i < faces.size(); i++ ) {
 		rectangle(frame, Point(faces[i].x, faces[i].y), Point(faces[i].x + faces[i].width, faces[i].y + faces[i].height), Scalar( 0, 255, 0 ), 2);
 	}
@@ -205,10 +206,21 @@ int detectAndDisplay( Mat frame ) {
     // Draws the ground truth rectangles in red
 	for ( int i = 0; i < lengthGT; i++) {
 		rectangle(frame, Point(GTArray[i].x, GTArray[i].y),
-							Point(GTArray[i].x + GTArray[i].width,
-						  GTArray[i].y + GTArray[i].height), Scalar( 0, 0, 255 ), 2);
+						 Point(GTArray[i].x + GTArray[i].width,
+						 GTArray[i].y + GTArray[i].height), Scalar( 0, 0, 255 ), 2);
 	}
 
 	return faces.size();
+}
+ 
+void violaJones( Mat frame, vector<Rect> &faces ) {
+	Mat frame_gray;
+
+	// Prepare Image by turning it into Grayscale and normalising lighting
+	cvtColor( frame, frame_gray, CV_BGR2GRAY );
+	equalizeHist( frame_gray, frame_gray );
+
+	// Perform Viola-Jones Object Detection
+	cascade.detectMultiScale( frame_gray, faces, 1.6, 1, 0|CV_HAAR_SCALE_IMAGE, Size(50, 50), Size(500,500) );
 }
 

@@ -9,21 +9,21 @@
 float radian_conversion = M_PI / (float) 180;
 
 /** @function main */
-int main( int argc, const char** argv ) {
-	// Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
-	Mat frame = imread(argv[1]);
-	Mat canny_img;
+// int main( int argc, const char** argv ) {
+// 	// Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
+// 	Mat frame = imread(argv[1]);
+// 	Mat canny_img;
 
-	getCanny(frame, canny_img, 50, 200);
-	hough_lines(frame, canny_img, 140);
-	hough_circles(frame, canny_img, 15, 10, 300);
+// 	getCanny(frame, canny_img, 50, 200);
+// 	hough_lines(frame, canny_img, 140);
+// 	hough_circles(frame, canny_img, 15, 10, 300);
 
-	cout << "hough shit" << endl;
-	return 0;
-}
+// 	cout << "hough shit" << endl;
+// 	return 0;
+// }
 
 // Performs hough transform on an image with a given threshold
-void hough_lines(Mat img, Mat canny_img, int thresholdHough) {
+void hough_lines(Mat img, Mat canny_img, int thresholdHough, Rect focus_area) {
 
 	int max_rho = hypot(img.rows, img.cols);
 	Mat hough_img(2*max_rho, 180, CV_32FC1); // This img contains hough space
@@ -74,7 +74,7 @@ void hough_lines(Mat img, Mat canny_img, int thresholdHough) {
 	imwrite("hough_result.jpg", lines_img);
 }
 
-void hough_circles(Mat img, Mat canny_img, int thresholdVal, int minRadius, int maxRadius) {
+void hough_circles(Mat img, Mat canny_img, int thresholdVal, int minRadius, int maxRadius, Rect focus_area) {
 	Mat directionImg, magnitudeImg;
 	getGradient(img, directionImg, magnitudeImg);
 	Mat circles_img = img.clone();
