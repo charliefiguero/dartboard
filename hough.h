@@ -12,5 +12,8 @@ using namespace std;
 using namespace cv;
 
 /** Function Headers */
-void hough_transform(Mat img, int thresholdHough, int lowThresholdCanny, int highThresholdCanny);
+void hough_lines(Mat img, Mat canny_img, int thresholdHough);
+void hough_circles(Mat img, Mat canny_img, int thresholdVal, int minRadius, int maxRadius);
+void getGradient(Mat &input, Mat &directionOutput, Mat &magnitudeOutput);
+void getCanny( Mat &inputImg, Mat &output, int lowThreshold, int highThreshold); 
 

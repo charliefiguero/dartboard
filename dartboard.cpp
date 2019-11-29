@@ -26,7 +26,7 @@ float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle);
 void findCorrectIOU(int i, int numberOfFaces);
 float calculateTpr();
 float calculateF1Score(int numberOfFaces);
-void hough_transform(Mat img, int thresholdHough, int lowThresholdCanny, int highThresholdCanny);
+void hough_lines(Mat img, int thresholdHough, int lowThresholdCanny, int highThresholdCanny);
 
 // Ground truth faces array -------------------------------------------------------------------------
 Rect dart0_ground[] = {Rect(449, 16, 151, 177)};
@@ -53,8 +53,8 @@ CascadeClassifier cascade;
 
 // these must be changed when using a different file
 // string saveImageLocation = "report/dart15_detected.jpg";
-int lengthGT = sizeof(dart14_ground)/sizeof(dart14_ground[0]);
-Rect GTArray[sizeof(dart14_ground)/sizeof(dart14_ground[0])] = dart14_ground;
+int lengthGT = sizeof(dart6_ground)/sizeof(dart6_ground[0]);
+Rect GTArray[sizeof(dart6_ground)/sizeof(dart6_ground[0])] = dart6_ground;
 float thresholdForCalculations = 0.45;
 
 // key is the index of the face that has been chosen
@@ -68,7 +68,10 @@ float ious[20][20];
 int main( int argc, const char** argv ) {
   // 1. Read Input Image
 	Mat frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);
-	hough_transform(frame, 100, 400, 600);
+	Mat canny_img;
+
+	getCanny(frame, canny_img, 50, 100);
+	hough_lines(frame, canny_img, 200);
 
 	// 2. Load the Strong Classifier in a structure called `Cascade'
 	if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
@@ -160,13 +163,14 @@ float calculateF1Score(int numberOfFaces) {
 	}
 
 	int falseNegatives = lengthGT - truePositives;
+	float precision = 0; 
 
- 	float precision = (float) truePositives / (float) numberOfFaces;
+ 	if (numberOfFaces > 0) precision = (float) truePositives / (float) numberOfFaces;
 	float recall = (float) truePositives / ((float) truePositives + (float) falseNegatives);
 	float f1Score = 0;
 
 	// if statement prevents division
-	if (precision != 0) f1Score = (2 * ((precision * recall) / (precision + recall)) );
+	if (precision > 0) f1Score = (2 * ((precision * recall) / (precision + recall)) );
 
 	return f1Score;
 }
@@ -181,7 +185,7 @@ int detectAndDisplay( Mat frame ) {
 	equalizeHist( frame_gray, frame_gray );
 
 	// 2. Perform Viola-Jones Object Detection
-	cascade.detectMultiScale( frame_gray, faces, 1.1, 1, 0|CV_HAAR_SCALE_IMAGE, Size(50, 50), Size(500,500) );
+	cascade.detectMultiScale( frame_gray, faces, 1.6, 1, 0|CV_HAAR_SCALE_IMAGE, Size(50, 50), Size(500,500) );
 
   // 3. Print number of faces found
 	std::cout << faces.size() << std::endl;
