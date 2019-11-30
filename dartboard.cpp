@@ -217,8 +217,8 @@ int detectAndDisplay( Mat frame ) {
 
 			if (circle_centres[j].x >= boards[i].x && circle_centres[j].x <= boards[i].x + boards[i].width
 					&& circle_centres[j].y >= boards[i].y && circle_centres[j].y <= boards[i].y + boards[i].height) {
-
 				int r = circle_centres[j].z;
+				
 				if (circle_hough_space.at<float>(circle_centres[j].y, circle_centres[j].x, r) > radius_threshold) {
 
 					Rect circle_rect = Rect(circle_centres[j].x - (r + minRadius), circle_centres[j].y - (r + minRadius), 2*(r + minRadius), 2*(r + minRadius));
