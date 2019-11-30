@@ -13,7 +13,11 @@ using namespace cv;
 
 /** Function Headers */
 void hough_lines(Mat img, Mat canny_img, Mat lines_img, int thresholdHough, Rect focus_area);
-int hough_circles(Mat img, Mat canny_img, Mat circles_img, Mat directionImg, int thresholdVal, int minRadius, int maxRadius, Rect focus_area);
+void create_circle_houghspace(Mat img, Mat canny_img, Mat circles_centres, Mat flattened_circle_hough, Mat directionImg, int minRadius, int maxRadius, Rect focus_area);
+
+void draw_circles( Mat circles_img, Mat circle_hough_space, Mat flattened_circle_hough, vector<Point3d> &circle_centres, int thresholdVal, int minRadius, int maxRadius);
+int find_circle_centres(Mat flattened_hough_space, int threshold_val, vector<Point> &circle_centres);
+
 void getGradient(Mat &input, Mat &directionOutput, Mat &magnitudeOutput);
 void getCanny( Mat &inputImg, Mat &output, int lowThreshold, int highThreshold); 
 

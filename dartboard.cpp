@@ -53,16 +53,12 @@ String cascade_name = "dartcascade/cascade.xml";
 CascadeClassifier cascade;
 
 // these must be changed when using a different file
-// string saveImageLocation = "report/dart15_detected.jpg";
-int lengthGT = sizeof(dart3_ground)/sizeof(dart3_ground[0]);
-Rect GTArray[sizeof(dart3_ground)/sizeof(dart3_ground[0])] = dart3_ground;
+int lengthGT = sizeof(dart1_ground)/sizeof(dart1_ground[0]);
+Rect GTArray[sizeof(dart1_ground)/sizeof(dart1_ground[0])] = dart1_ground;
 float thresholdForCalculations = 0.45;
 
-// key is the index of the face that has been chosen
-// value is the index of the GT which chose the face
-std::unordered_map<int, int> chosenboards;
-// array to store the correct IOUs for each GT
-float GT_IOU_values[sizeof(GTArray)/sizeof(GTArray[0])];
+std::unordered_map<int, int> chosenboards; // index of chosen face, index of GT which chose face
+float GT_IOU_values[sizeof(GTArray)/sizeof(GTArray[0])]; // array to store the correct IOUs for each GT
 float ious[20][20];
 
 /** @function main */
@@ -174,8 +170,12 @@ float calculateF1Score(int numberOfboards) {
 
 /** @function detectAndDisplay */
 int detectAndDisplay( Mat frame ) {
-	std::vector<Rect> boards; // Contains the locations of rectangles detected by Viola Jones
+	vector<Rect> boards; // Contains the locations of rectangles detected by Viola Jones
+	vector<Rect> refinedBoards;
+
 	Mat canny_img, directionImg, magnitudeImg;
+	Rect imageDimensions = Rect(0, 0, frame.cols, frame.rows);
+
 	Mat lines_image = frame.clone(); // Lines will be drawn to this image
 	Mat circles_image = frame.clone(); // Surcools will be drawn to this image
 	
@@ -183,36 +183,76 @@ int detectAndDisplay( Mat frame ) {
 	getGradient(frame, directionImg, magnitudeImg);
 	violaJones(frame, boards);
 
-	cout << "There are: " << boards.size() << " boards to detect. OK im going to start! Buckle up butterboi!" << endl; 
+	// Variables for detections
+	int circleHoughThreshold = 15;
+	int maxRadius = max(imageDimensions.height, imageDimensions.width) * 0.63;
+	int minRadius = maxRadius * 0.05;
 
+	int circle_hough_space_dim[3] = {frame.rows + (2 * maxRadius), frame.cols + (2 * maxRadius), maxRadius - minRadius + 1}; // adding border padding of maxRadius
+	Mat circle_hough_space(3, circle_hough_space_dim, CV_32F, Scalar(0));
+	Mat flattened_circle_hough((frame.rows + (2 * maxRadius)), frame.cols + (2 * maxRadius), CV_32FC1);
 
-	vector<Rect> refinedBoards;
-	int circleCount;
-	// Applies hough functions to areas detected by Viola Jones
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	std::cout << "There are: " << boards.size() << " boards to detect. OK im going to start! Buckle up butterboi!" << endl; 
+
+	vector<Point3d> circle_centres;
+	create_circle_houghspace(frame, canny_img, circle_hough_space, flattened_circle_hough, directionImg, minRadius, maxRadius, imageDimensions);
+	draw_circles(circles_image, circle_hough_space, flattened_circle_hough, circle_centres, circleHoughThreshold, minRadius, maxRadius); // Draws and counts circles
+
+	//vector<Point> circle_centres;
+	//int circle_count = find_circle_centres(flattened_circle_hough, 250, circle_centres);
+	//cout << "circle_count: " << circle_count << endl;
+
+	vector<Point> circle_centres_in_viola;
+
+	int radius_threshold = 20;
+	cout << circle_centres.size() << endl;
+	
+	// check if viola rects contain circle centres
 	for (int i = 0; i < boards.size(); i++) {
-		int circleHoughThreshold = boards[i].area()/500;
+		Rect best_iou_circle_rect;
+		int best_iou = 0;
 
-		circleCount = hough_circles(frame, canny_img, circles_image, directionImg, circleHoughThreshold, 10, 300, boards[i]);
+		for (int j = 0; j < circle_centres.size(); j++) {
 
-		if (circleCount > 5) refinedBoards.push_back(boards[i]);
-		cout << "By the way, the circleCount for this face is: " << circleCount << endl;
+			if (circle_centres[j].x >= boards[i].x && circle_centres[j].x <= boards[i].x + boards[i].width
+					&& circle_centres[j].y >= boards[i].y && circle_centres[j].y <= boards[i].y + boards[i].height) {
 
-		if (circleCount > 5) {
-			int lineHoughThreshold = boards[i].area()/500; 
+				int r = circle_centres[j].z;
+				if (circle_hough_space.at<float>(circle_centres[j].y, circle_centres[j].x, r) > radius_threshold) {
 
-			cout << "houghThreshold = " << lineHoughThreshold << endl;
-			
-			hough_lines(frame, canny_img, lines_image, lineHoughThreshold, boards[i]);
+					Rect circle_rect = Rect(circle_centres[j].x - (r + minRadius), circle_centres[j].y - (r + minRadius), 2*(r + minRadius), 2*(r + minRadius));
+					float iou = calculateIOU(circle_rect, boards[i]);
+
+				if (iou > best_iou) best_iou_circle_rect = circle_rect;
+				}
+			}	
 		}
-		cout << (i+1) << " mississipi, " << endl;
+		refinedBoards.push_back(best_iou_circle_rect);
 	}
+		
+	
+	
+	// ---------------------Filters viola boards by circleCount---------------------
+	// 	cout << "By the way, the circleCount for this face is: " << circleCount << endl;
+
+	// 	if (circleCount > 5) {
+	// 		int lineHoughThreshold = boards[i].area()/500; 
+
+	// 		cout << "houghThreshold = " << lineHoughThreshold << endl;
+			
+	// 		hough_lines(frame, canny_img, lines_image, lineHoughThreshold, boards[i]);
+	// 	}
+	// 	cout << (i+1) << " mississipi, " << endl;
+	// }
+	// ------------------------------------------------------------------------------
+
 	imwrite("hough_lines.jpg", lines_image);
 	imwrite("hough_circles.jpg", circles_image);
-
 	cout << "Wow that was fun! See you later aha ;)" << endl;
-	
-  	// Print number of boards found
-	std::cout << boards.size() << std::endl;
+
+
+	// -----------------------------------Scorings-----------------------------------
 
 	// populate ious table
 	for (int i = 0; i < lengthGT; i++) {
@@ -220,10 +260,13 @@ int detectAndDisplay( Mat frame ) {
 			ious[i][j] = calculateIOU(boards[j], GTArray[i]);
 		}
 	}
-
     // Draw box around boards found
+	for( int i = 0; i < boards.size(); i++ ) {
+		rectangle(frame, Point(boards[i].x, boards[i].y), Point(boards[i].x + boards[i].width, boards[i].y + boards[i].height), Scalar( 0, 255, 0 ), 2);
+	}
+	// Draw box around boards found
 	for( int i = 0; i < refinedBoards.size(); i++ ) {
-		rectangle(frame, Point(refinedBoards[i].x, refinedBoards[i].y), Point(refinedBoards[i].x + refinedBoards[i].width, refinedBoards[i].y + refinedBoards[i].height), Scalar( 0, 255, 0 ), 2);
+		rectangle(frame, Point(refinedBoards[i].x, refinedBoards[i].y), Point(refinedBoards[i].x + refinedBoards[i].width, refinedBoards[i].y + refinedBoards[i].height), Scalar( 89, 48, 1 ), 2);
 	}
 
     // Draws the ground truth rectangles in red
@@ -232,7 +275,7 @@ int detectAndDisplay( Mat frame ) {
 						 Point(GTArray[i].x + GTArray[i].width,
 						 GTArray[i].y + GTArray[i].height), Scalar( 0, 0, 255 ), 2);
 	}
-
+	// ------------------------------------------------------------------------------
 	return boards.size();
 }
  
