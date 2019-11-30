@@ -26,7 +26,6 @@ float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle);
 void findCorrectIOU(int i, int numberOfboards);
 float calculateTpr();
 float calculateF1Score(int numberOfboards);
-void hough_lines(Mat img, int thresholdHough, int lowThresholdCanny, int highThresholdCanny);
 void violaJones(Mat frame, vector<Rect> &boards);
 
 // Ground truth boards array -------------------------------------------------------------------------
@@ -53,8 +52,8 @@ String cascade_name = "dartcascade/cascade.xml";
 CascadeClassifier cascade;
 
 // these must be changed when using a different file
-int lengthGT = sizeof(dart1_ground)/sizeof(dart1_ground[0]);
-Rect GTArray[sizeof(dart1_ground)/sizeof(dart1_ground[0])] = dart1_ground;
+int lengthGT = sizeof(dart12_ground)/sizeof(dart12_ground[0]);
+Rect GTArray[sizeof(dart12_ground)/sizeof(dart12_ground[0])] = dart12_ground;
 float thresholdForCalculations = 0.45;
 
 std::unordered_map<int, int> chosenboards; // index of chosen face, index of GT which chose face
@@ -193,45 +192,47 @@ int detectAndDisplay( Mat frame ) {
 	Mat flattened_circle_hough((frame.rows + (2 * maxRadius)), frame.cols + (2 * maxRadius), CV_32FC1);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	std::cout << "There are: " << boards.size() << " boards to detect. OK im going to start! Buckle up butterboi!" << endl; 
+	std::cout << "There are: " << boards.size() << " boards to detect. OK im going to start! Buckle up buckeroo!" << endl; 
 
 	vector<Point3d> circle_centres;
 	create_circle_houghspace(frame, canny_img, circle_hough_space, flattened_circle_hough, directionImg, minRadius, maxRadius, imageDimensions);
 	draw_circles(circles_image, circle_hough_space, flattened_circle_hough, circle_centres, circleHoughThreshold, minRadius, maxRadius); // Draws and counts circles
 
-	//vector<Point> circle_centres;
-	//int circle_count = find_circle_centres(flattened_circle_hough, 250, circle_centres);
-	//cout << "circle_count: " << circle_count << endl;
-
-	vector<Point> circle_centres_in_viola;
-
 	int radius_threshold = 20;
-	cout << circle_centres.size() << endl;
 	
-	// check if viola rects contain circle centres
+	// check if viola rects contain circle centres, then picks the best circle rect to match with 
 	for (int i = 0; i < boards.size(); i++) {
 		Rect best_iou_circle_rect;
 		int best_iou = 0;
 
 		for (int j = 0; j < circle_centres.size(); j++) {
 
-			if (circle_centres[j].x >= boards[i].x && circle_centres[j].x <= boards[i].x + boards[i].width
-					&& circle_centres[j].y >= boards[i].y && circle_centres[j].y <= boards[i].y + boards[i].height) {
+			if (circle_centres[j].x >= boards[i].x && circle_centres[j].x <= (boards[i].x + boards[i].width)
+					&& circle_centres[j].y >= boards[i].y && circle_centres[j].y <= (boards[i].y + boards[i].height)) {
 				int r = circle_centres[j].z;
-				
-				if (circle_hough_space.at<float>(circle_centres[j].y, circle_centres[j].x, r) > radius_threshold) {
-
-					Rect circle_rect = Rect(circle_centres[j].x - (r + minRadius), circle_centres[j].y - (r + minRadius), 2*(r + minRadius), 2*(r + minRadius));
-					float iou = calculateIOU(circle_rect, boards[i]);
+					
+				Rect circle_rect = Rect(circle_centres[j].x - r, circle_centres[j].y - r, 2*r, 2*r);
+				float iou = calculateIOU(circle_rect, boards[i]);
 
 				if (iou > best_iou) best_iou_circle_rect = circle_rect;
-				}
 			}	
 		}
-		refinedBoards.push_back(best_iou_circle_rect);
+		if (best_iou_circle_rect.width != 0 || best_iou_circle_rect.height != 0) refinedBoards.push_back(best_iou_circle_rect);
+	}
+
+	// TODO
+	// if no circles were found, fill with viola jones and lines if (refinedBoards.isEmpty)
+
+	//TODO
+	// run lines on all boards?
+
+	// checks inside of refinedBoards to make sure there are lines 
+	for (int i = 0; i < refinedBoards.size(); i++) {
+		int hough_line_threshold = 50;
+		hough_lines(canny_img, refinedBoards[i], directionImg, lines_image, hough_line_threshold);
 	}
 		
-	
+	cout << "There were: " << refinedBoards.size() << " refinedBoards!" << endl;
 	
 	// ---------------------Filters viola boards by circleCount---------------------
 	// 	cout << "By the way, the circleCount for this face is: " << circleCount << endl;
@@ -266,7 +267,7 @@ int detectAndDisplay( Mat frame ) {
 	}
 	// Draw box around boards found
 	for( int i = 0; i < refinedBoards.size(); i++ ) {
-		rectangle(frame, Point(refinedBoards[i].x, refinedBoards[i].y), Point(refinedBoards[i].x + refinedBoards[i].width, refinedBoards[i].y + refinedBoards[i].height), Scalar( 89, 48, 1 ), 2);
+		rectangle(frame, Point(refinedBoards[i].x, refinedBoards[i].y), Point(refinedBoards[i].x + refinedBoards[i].width, refinedBoards[i].y + refinedBoards[i].height), Scalar( 255, 255, 255 ), 2);
 	}
 
     // Draws the ground truth rectangles in red

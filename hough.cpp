@@ -31,10 +31,12 @@ float radian_conversion = M_PI / (float) 180;
 // ------------------------------------------------------------------------------
 
 // Performs hough transform on an image with a given threshold
-void hough_lines(Mat img, Mat canny_img, Mat lines_img, int thresholdHough, Rect focus_area) {
+void hough_lines(Mat canny_img, Rect focus_area, Mat direction_image, Mat lines_img, int thresholdHough) {
+	int angles_per_degree = 2;
+	int delta_theta = 20; // 360 to avoid negative numbers
 
-	int max_rho = hypot(img.rows, img.cols);
-	Mat hough_img(2*max_rho, 180, CV_32FC1); // This img contains hough space
+	int max_rho = hypot(lines_img.rows, lines_img.cols);
+	Mat hough_img(2*max_rho, 180*angles_per_degree, CV_32FC1); // This img contains hough space
 
 	int xStart = focus_area.x;
 	int xEnd = focus_area.x + focus_area.width;
@@ -47,22 +49,33 @@ void hough_lines(Mat img, Mat canny_img, Mat lines_img, int thresholdHough, Rect
 
 			if ((int) canny_img.at<uchar>(i, j) == 255) { // if canny detects an edge here
 
-				for (int theta = 0; theta < 180; theta++) { // Increment pixel value in hough space
-					int rho = round((j * cos( (theta) * radian_conversion ) ) + (i * sin( (theta) * radian_conversion))) + max_rho; // x.cos(theta) + y.sin(theta)
-					hough_img.at<float>(rho, theta) += 1; // y then x-- therefore theta is plotted along x
+				// (gradient direction + PI to find edge direction) -> radian conversion -> -delta_theta for start of angle range -> mult by angles_per_degree
+				int theta_start = (( round(direction_image.at<float> (i, j) + M_PI) / radian_conversion) - delta_theta) * angles_per_degree;
+				int theta_end = (( round(direction_image.at<float> (i, j) + M_PI) / radian_conversion) + delta_theta) * angles_per_degree;
+
+				// ends at
+				direction_image.at<float> ();
+
+				for (int theta = theta_start; theta <= theta_end; theta++) { // Increment pixel value in hough space
+					float correct_theta_rads = ((theta%(angles_per_degree*180))/angles_per_degree) * radian_conversion; 
+					int rho = round((j * cos(correct_theta_rads)) + (i * sin(correct_theta_rads))) + max_rho; // x.cos(theta) + y.sin(theta)
+					hough_img.at<float>(rho, theta%(angles_per_degree*180))++; // y then x-- therefore theta is plotted along x
 				}
 			}
 		}
 	}
 
-	//imwrite("result_hough_space.jpg", hough_img);
+	imwrite("result_hough_space.jpg", hough_img);
 
 	// Go through every pixel in hough
 	// If above threshhold add to pixel in corresponding houghspace
 	for ( int i = 0; i < hough_img.rows; i++ ) {
 		for( int j = 0; j < hough_img.cols; j++ ) {
 			if (hough_img.at<float>(i, j) > thresholdHough) {
-			  	float rho = (i - max_rho), theta = (j)*radian_conversion;
+
+				cout << "im adding a line!" << endl;
+
+			  	float rho = (i - max_rho), theta = (j/angles_per_degree)*radian_conversion;
 			  	Point pt1, pt2; // pt1 is x intercept, pt2 is y
 
 			  	double a = cos(theta), b = sin(theta);
@@ -75,11 +88,13 @@ void hough_lines(Mat img, Mat canny_img, Mat lines_img, int thresholdHough, Rect
 
 			  	line( lines_img, pt1, pt2, Scalar(0,0,255), 3, CV_AA);
 			}
+
 		}
 	}
+	cout << "you're outta line!" << endl;
 }
 
-void create_circle_houghspace(Mat img, Mat canny_img, Mat circle_hough_space, Mat flattened_circle_hough, Mat directionImg, int minRadius, int maxRadius, Rect focus_area) {
+void create_circle_houghspace(Mat img, Mat canny_img, Mat &circle_hough_space, Mat flattened_circle_hough, Mat directionImg, int minRadius, int maxRadius, Rect focus_area) {
 	int xStart = focus_area.x;
 	int xEnd = focus_area.x + focus_area.width;
 	int yStart = focus_area.y;
@@ -99,7 +114,7 @@ void create_circle_houghspace(Mat img, Mat canny_img, Mat circle_hough_space, Ma
 
 					circle_hough_space.at<float>(y0Pos, x0Pos, (r - minRadius))++; // indexing is offset by the minimum radius
 					circle_hough_space.at<float>(y0Neg, x0Neg, (r - minRadius))++;	
-
+					//cout << circle_hough_space.at<float>(y0Neg, x0Neg, (r - minRadius)) << endl;
 					flattened_circle_hough.at<float>(y0Pos, x0Pos)++;	
 					flattened_circle_hough.at<float>(y0Neg, x0Neg)++;	
 				}
@@ -120,7 +135,7 @@ void draw_circles( Mat circles_img, Mat circle_hough_space, Mat flattened_circle
 				if (circle_hough_space.at<float>(i, j, r - minRadius) > thresholdVal) { // -minRadius to offset padding 
 					Point centre = Point(j - maxRadius, i - maxRadius); // -maxRadius to offset padding 
 					circle(circles_img, centre, r, Scalar( 0, 255, 0 ));
-					circle_centres.push_back(Point3d(j, i, r));
+					circle_centres.push_back(Point3d(j - maxRadius, i - maxRadius, r));
 				}
 			}
 		}
