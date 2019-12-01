@@ -12,7 +12,7 @@ using namespace std;
 using namespace cv;
 
 /** Function Headers */
-void hough_lines(Mat canny_img, Rect focus_area, Mat direction_img, Mat lines_img, int thresholdHough);
+int hough_lines(Mat canny_img, Rect focus_area, Mat direction_image, Mat lines_img, int thresholdHough);
 void create_circle_houghspace(Mat img, Mat canny_img, Mat &circle_hough_space, Mat flattened_circle_hough, Mat directionImg, int minRadius, int maxRadius, Rect focus_area);
 
 void draw_circles( Mat circles_img, Mat circle_hough_space, Mat flattened_circle_hough, vector<Point3d> &circle_centres, int thresholdVal, int minRadius, int maxRadius);

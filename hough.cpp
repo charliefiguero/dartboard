@@ -11,7 +11,7 @@
 #include "hough.h"
 
 /** Global variables */
-float radian_conversion = M_PI / (float) 180;
+const float radian_conversion = M_PI / (float) 180;
 
 // -------------------------------------Main-------------------------------------
 /** @function main */
@@ -31,9 +31,10 @@ float radian_conversion = M_PI / (float) 180;
 // ------------------------------------------------------------------------------
 
 // Performs hough transform on an image with a given threshold
-void hough_lines(Mat canny_img, Rect focus_area, Mat direction_image, Mat lines_img, int thresholdHough) {
+int hough_lines(Mat canny_img, Rect focus_area, Mat direction_image, Mat lines_img, int thresholdHough) {
 	int angles_per_degree = 2;
 	int delta_theta = 20; // 360 to avoid negative numbers
+	int line_count = 0;
 
 	int max_rho = hypot(lines_img.rows, lines_img.cols);
 	Mat hough_img(2*max_rho, 180*angles_per_degree, CV_32FC1); // This img contains hough space
@@ -73,8 +74,6 @@ void hough_lines(Mat canny_img, Rect focus_area, Mat direction_image, Mat lines_
 		for( int j = 0; j < hough_img.cols; j++ ) {
 			if (hough_img.at<float>(i, j) > thresholdHough) {
 
-				cout << "im adding a line!" << endl;
-
 			  	float rho = (i - max_rho), theta = (j/angles_per_degree)*radian_conversion;
 			  	Point pt1, pt2; // pt1 is x intercept, pt2 is y
 
@@ -87,11 +86,12 @@ void hough_lines(Mat canny_img, Rect focus_area, Mat direction_image, Mat lines_
 			  	pt2.y = cvRound(y0 - 2000*(a));
 
 			  	line( lines_img, pt1, pt2, Scalar(0,0,255), 3, CV_AA);
+				line_count++;
 			}
 
 		}
 	}
-	cout << "you're outta line!" << endl;
+	return line_count;
 }
 
 void create_circle_houghspace(Mat img, Mat canny_img, Mat &circle_hough_space, Mat flattened_circle_hough, Mat directionImg, int minRadius, int maxRadius, Rect focus_area) {
