@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <math.h>
 
 using namespace std;
@@ -27,6 +28,7 @@ void findCorrectIOU(int i, int numberOfboards);
 float calculateTpr();
 float calculateF1Score(int numberOfboards);
 void violaJones(Mat frame, vector<Rect> &boards);
+void clusterRectangles(vector<Rect> &rectangles, float iou_cull_threshold);
 
 // Ground truth boards array -------------------------------------------------------------------------
 Rect dart0_ground[] = {Rect(449, 16, 151, 177)};
@@ -79,7 +81,6 @@ int main( int argc, const char** argv ) {
 	// find TPR
 	float tpr = calculateTpr();
 	float f1Score = calculateF1Score(numberOfboards);
-	//std::cout << tpr << std::endl;
   	std::cout << "tpr: " << tpr << std::endl;
 	std::cout << "f1Score: " << f1Score << std::endl;
 
@@ -184,10 +185,11 @@ int detectAndDisplay( Mat frame ) {
 	Mat circles_image = frame.clone(); // Surcools will be drawn to this image
 	
 	getCanny(frame, canny_img, 50, 100);
+	imwrite("canny.jpg", canny_img);
 	getGradient(frame, directionImg, magnitudeImg);
 
 	// Variables for detections
-	int circleHoughThreshold = imageDimensions.area() / 37000;
+	int circleHoughThreshold = 12;
 	int maxRadius = max(imageDimensions.height, imageDimensions.width) * 0.63;
 	int minRadius = maxRadius * 0.05;
 
@@ -200,108 +202,103 @@ int detectAndDisplay( Mat frame ) {
 
 	// Creates boards from Viola Jones
 	violaJones(frame, violaBoards);
+	//int line_count = hough_lines(canny_img, imageDimensions, directionImg, lines_image, 90);
 
 	// Creates boards from cicles
 	create_circle_houghspace(frame, canny_img, circle_hough_space, flattened_circle_hough, directionImg, minRadius, maxRadius, imageDimensions);
 	draw_circles(circles_image, circle_hough_space, flattened_circle_hough, circle_centres, circleHoughThreshold, minRadius, maxRadius); // Draws and counts circles
-
-	// cluster-fuck surcools
 	
-
-	// cluster-fuck violas
-
-	
+	// vector<int> added_circle_indices;
+	unordered_set<int> added_circle_indices;
 	// ------------------------------Check for overlap between circle and Viola boards -------------------------------------------------------------------
 	for (int i = 0; i < violaBoards.size(); i++) {
 		Rect best_iou_circle_rect;
 		float best_iou = 0;
+		int best_iou_index;
 
 		for (int j = 0; j < circle_centres.size(); j++) {
 			int r = circle_centres[j].z; // r = true radius of circle
 			Rect circle_rect = Rect(circle_centres[j].x - r, circle_centres[j].y - r, 2*r, 2*r); // for each circle create a rect around it
-
-			if (circle_centres[j].x >= violaBoards[i].x && circle_centres[j].x <= (violaBoards[i].x + violaBoards[i].width)
-					&& circle_centres[j].y >= violaBoards[i].y && circle_centres[j].y <= (violaBoards[i].y + violaBoards[i].height)) { // if circle centre lies inside of viola detection
 					
-				float iou = calculateIOU(circle_rect, violaBoards[i]);
+			float iou = calculateIOU(circle_rect, violaBoards[i]);
 
-				if (iou < 0.8) { // every board with low iou given more processing
-					rejected_circle_boards.push_back(circle_rect);
-				}
-				else {
-					if (iou > best_iou) { // only one circle with iou greater than threshold is rejected
-						best_iou_circle_rect = circle_rect;
-						best_iou = iou;
-					}
-				}
+			if ((iou > best_iou) && (iou > 0.45)) { // only one circle with iou greater than threshold is rejected
+				best_iou_circle_rect = circle_rect;
+				best_iou = iou;
+				best_iou_index = j;
 			}
-			else { // Circle does not intercept viola at all
-				rejected_circle_boards.push_back(circle_rect);
-			}	
-
 		}
-		if (best_iou_circle_rect.width != 0 || best_iou_circle_rect.height != 0) detectedBoards.push_back(best_iou_circle_rect); // if there was an overlapping iou add to detectedBoards
+		if (best_iou_circle_rect.width != 0 || best_iou_circle_rect.height != 0) { // a best iou was found
+			if (added_circle_indices.count(best_iou_index) == 0) { // if the circle has not already been added to detectedBoards,
+				detectedBoards.push_back(best_iou_circle_rect); 
+				added_circle_indices.insert(best_iou_index); // add this index to the hashset to indicate it has been added to detectedBoards
+			}
+		}
 		else {
 			rejected_viola_boards.push_back(violaBoards[i]); // else add viola to rejected violas 
 		}
 	}
+	// Now we have: rects detected by both viola and circle hough in detectedBoards, the index of each of these circles in a hashset
+	// and the violas which didn't match a circle in rejected_viola_boards
+
+	for (int i = 0; i < circle_centres.size(); i++) {
+		if (added_circle_indices.count(i) == 0) {
+			int r = circle_centres[i].z; // r = true radius of circle
+			Rect circle_rect = Rect(circle_centres[i].x - r, circle_centres[i].y - r, 2*r, 2*r);
+			rejected_circle_boards.push_back(circle_rect);
+		}
+	}
+	// We now also have all the circles which didn't match a viola in rejected_circle_boards
 	// -----------------------------------------------------------------------------------------------------------------------------------------------
 
+	vector<int> clustered_off;
+	clusterRectangles(rejected_circle_boards, 0.8);
+	clusterRectangles(rejected_viola_boards, 0.2);
 
-	// process rejected violas
-	for (int i = 0; i < rejected_viola_boards.size(); i++) { // if board has enough lines, add to detectedBoards
-		int hough_line_threshold = rejected_viola_boards[i].area() / 600;
-		//Rect rect = Rect(circle_centres[i].x - circle_centres[i].z, circle_centres[i].y - circle_centres[i].z, 2*circle_centres[i].z, 2*circle_centres[i].z);
-		int line_count = hough_lines(canny_img, rejected_viola_boards[i], directionImg, lines_image, hough_line_threshold);
-		if (line_count > 10) detectedBoards.push_back(rejected_viola_boards[i]);
-	}
-
-	// process rejected circles
-		// # of lines in circle check
-
-
-
-
-	// finally, combine overlapping detected boards
-
-		
-	cout << "There were: " << detectedBoards.size() << " refinedBoards!" << endl;
 	
-	// ---------------------Filters viola boards by circleCount---------------------
-	// 	cout << "By the way, the circleCount for this face is: " << circleCount << endl;
+	// Process rejected violas ---------------------------------------------------------------
 
-	// 	if (circleCount > 5) {
-	// 		int lineHoughThreshold = boards[i].area()/500; 
+	for (int i = 0; i < rejected_viola_boards.size(); i++) { // if board has enough lines, add to detectedBoards
+		int hough_line_threshold = 0;
+		if (detectedBoards.empty()) hough_line_threshold = (rejected_viola_boards[i].area()/4544) + 30;
+		else hough_line_threshold = (rejected_viola_boards[i].area()/5000) + 60;
+		int line_count = hough_lines(canny_img, rejected_viola_boards[i], directionImg, lines_image, hough_line_threshold);
+		if (line_count > 5) {
+			detectedBoards.push_back(rejected_viola_boards[i]);
+		}
+	}
+	// ---------------------------------------------------------------------------------------
 
-	// 		cout << "houghThreshold = " << lineHoughThreshold << endl;
-			
-	// 		hough_lines(frame, canny_img, lines_image, lineHoughThreshold, boards[i]);
-	// 	}
-	// 	cout << (i+1) << " mississipi, " << endl;
-	// }
-	// ------------------------------------------------------------------------------
+	// Process rejected circles --------------------------------------------------------------
+
+	for (int i = 0; i < rejected_circle_boards.size(); i++) { // if board has enough lines, add to detectedBoards
+		int hough_line_threshold = (rejected_circle_boards[i].area()/4544) + 70;
+		int line_count = hough_lines(canny_img, rejected_circle_boards[i], directionImg, lines_image, hough_line_threshold);
+		if (line_count > 5) {
+			detectedBoards.push_back(rejected_circle_boards[i]);
+		}
+	}
+	// ---------------------------------------------------------------------------------------
+
+	clusterRectangles(detectedBoards, 0.1);
+	
+	cout << "There were: " << detectedBoards.size() << " detectedBoards!" << endl;
 
 	imwrite("hough_lines.jpg", lines_image);
 	imwrite("hough_circles.jpg", circles_image);
-	cout << "Wow that was fun! See you later aha ;)" << endl;
-
-
 	// -----------------------------------Scorings-----------------------------------
 
 	// populate ious table
 	for (int i = 0; i < lengthGT; i++) {
-		for (int j = 0; j < violaBoards.size(); j++) {
-			ious[i][j] = calculateIOU(violaBoards[j], GTArray[i]);
+		for (int j = 0; j < detectedBoards.size(); j++) {
+			ious[i][j] = calculateIOU(detectedBoards[j], GTArray[i]);
 		}
 	}
-    // Draw box around boards found
-	for( int i = 0; i < violaBoards.size(); i++ ) {
-		rectangle(frame, Point(violaBoards[i].x, violaBoards[i].y), Point(violaBoards[i].x + violaBoards[i].width, violaBoards[i].y + violaBoards[i].height), Scalar( 0, 255, 0 ), 2);
+
+	//Draw box around boards found
+	for( int i = 0; i < detectedBoards.size(); i++ ) {
+		rectangle(frame, Point(detectedBoards[i].x, detectedBoards[i].y), Point(detectedBoards[i].x + detectedBoards[i].width, detectedBoards[i].y + detectedBoards[i].height), Scalar( 255, 255, 255 ), 2);
 	}
-	// // Draw box around boards found
-	// for( int i = 0; i < refinedBoardsUsingLines.size(); i++ ) {
-	// 	rectangle(frame, Point(refinedBoardsUsingLines[i].x, refinedBoardsUsingLines[i].y), Point(refinedBoardsUsingLines[i].x + refinedBoardsUsingLines[i].width, refinedBoardsUsingLines[i].y + refinedBoardsUsingLines[i].height), Scalar( 255, 255, 255 ), 2);
-	// }
 
     // Draws the ground truth rectangles in red
 	for ( int i = 0; i < lengthGT; i++) {
@@ -310,7 +307,7 @@ int detectAndDisplay( Mat frame ) {
 						 GTArray[i].y + GTArray[i].height), Scalar( 0, 0, 255 ), 2);
 	}
 	// ------------------------------------------------------------------------------
-	return violaBoards.size();
+	return detectedBoards.size();
 }
  
 void violaJones( Mat frame, vector<Rect> &boards ) {
@@ -322,5 +319,27 @@ void violaJones( Mat frame, vector<Rect> &boards ) {
 
 	// Perform Viola-Jones Object Detection
 	cascade.detectMultiScale( frame_gray, boards, 1.6, 1, 0|CV_HAAR_SCALE_IMAGE, Size(50, 50), Size(500,500) );
+}
+
+void clusterRectangles(vector<Rect> &rectangles, float iou_cull_threshold) {
+	vector<int> final_clustered_off;
+	vector<int> weights(rectangles.size(), 1);
+	for (int i = 0; i < rectangles.size(); i++) { // check iou with every other circle 
+		for (int j = i + 1; j < rectangles.size(); j++) {
+			float iou = calculateIOU(rectangles[i], rectangles[j]);
+			if (iou > iou_cull_threshold) {
+				rectangles[j] = Rect(((rectangles[i].x * weights[i]) + (rectangles[j].x * weights[j])) / (weights[j] + weights[i]),
+										 ((rectangles[i].y * weights[i]) + (rectangles[j].y * weights[j])) / (weights[j] + weights[i]),
+										 ((rectangles[i].width * weights[i]) + (rectangles[j].width * weights[j])) / (weights[j] + weights[i]),
+										 ((rectangles[i].height * weights[i]) + (rectangles[j].height * weights[j])) / (weights[j] + weights[i]));
+				final_clustered_off.push_back(i);
+				weights[j] = weights[j] + weights[i];
+				break;
+			}	
+		}
+	}
+	for (int i = 0; i < final_clustered_off.size(); i++) {
+		rectangles.erase(rectangles.begin() + final_clustered_off[i] - i);
+	}
 }
 

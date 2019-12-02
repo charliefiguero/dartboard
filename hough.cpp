@@ -38,35 +38,42 @@ int hough_lines(Mat canny_img, Rect focus_area, Mat direction_image, Mat lines_i
 
 	int max_rho = hypot(lines_img.rows, lines_img.cols);
 	Mat hough_img(2*max_rho, 180*angles_per_degree, CV_32FC1); // This img contains hough space
+	hough_img = Scalar(0);
 
 	int xStart = focus_area.x;
 	int xEnd = focus_area.x + focus_area.width;
 	int yStart = focus_area.y;
 	int yEnd = focus_area.y + focus_area.height;
 
+	if( xStart < 0 ) xStart = 0;
+	if( yStart < 0 ) yStart = 0;
+	if( xEnd > lines_img.cols ) xEnd = lines_img.cols;
+	if( yEnd > lines_img.rows ) yEnd = lines_img.rows;
+
     // Creates houghspace for image on hough_img
-	for ( int i = yStart; i <= yEnd; i++ ) {
+	for ( int i = yStart; i < yEnd; i++ ) {
 		for( int j = xStart; j < xEnd; j++ ) { //loop over pixels in img
 
 			if ((int) canny_img.at<uchar>(i, j) == 255) { // if canny detects an edge here
 
 				// (gradient direction + PI to find edge direction) -> radian conversion -> -delta_theta for start of angle range -> mult by angles_per_degree
-				int theta_start = (( round(direction_image.at<float> (i, j) + M_PI) / radian_conversion) - delta_theta) * angles_per_degree;
-				int theta_end = (( round(direction_image.at<float> (i, j) + M_PI) / radian_conversion) + delta_theta) * angles_per_degree;
+				// int theta_start = (( round(direction_image.at<float> (i, j) - M_PI/2) / radian_conversion) - delta_theta) * angles_per_degree;
+				// int theta_end = (( round(direction_image.at<float> (i, j) - M_PI/2) / radian_conversion) + delta_theta) * angles_per_degree;
+				int theta_start = 0;
+				int theta_end = 360;
 
-				// ends at
-				direction_image.at<float> ();
-
-				for (int theta = theta_start; theta <= theta_end; theta++) { // Increment pixel value in hough space
+				for (int theta = theta_start; theta < theta_end; theta++) { // Increment pixel value in hough space
 					float correct_theta_rads = ((theta%(angles_per_degree*180))/angles_per_degree) * radian_conversion; 
 					int rho = round((j * cos(correct_theta_rads)) + (i * sin(correct_theta_rads))) + max_rho; // x.cos(theta) + y.sin(theta)
-					hough_img.at<float>(rho, theta%(angles_per_degree*180))++; // y then x-- therefore theta is plotted along x
+					// hough_img.at<float>(rho, theta%(angles_per_degree*180))++; // y then x-- therefore theta is plotted along x
+					hough_img.at<float>(rho, theta%(angles_per_degree*180))++;
 				}
 			}
 		}
 	}
-
+	// hough space has been created
 	imwrite("result_hough_space.jpg", hough_img);
+	//rectangle(lines_img, Point(focus_area.x, focus_area.y), Point(focus_area.x + focus_area.width, focus_area.y + focus_area.height), Scalar( 255, 255, 255 ), 2);
 
 	// Go through every pixel in hough
 	// If above threshhold add to pixel in corresponding houghspace
@@ -85,8 +92,8 @@ int hough_lines(Mat canny_img, Rect focus_area, Mat direction_image, Mat lines_i
 			  	pt2.x = cvRound(x0 - 2000*(-b));
 			  	pt2.y = cvRound(y0 - 2000*(a));
 
-			  	line( lines_img, pt1, pt2, Scalar(0,0,255), 3, CV_AA);
-				line_count++;
+				line( lines_img, pt1, pt2, Scalar(0,0,255), 3, CV_AA); // draws lines
+				line_count++;	
 			}
 
 		}
@@ -101,8 +108,8 @@ void create_circle_houghspace(Mat img, Mat canny_img, Mat &circle_hough_space, M
 	int yEnd = focus_area.y + focus_area.height;
 	
 	// Creates houghspace for image on hough_img
-	for ( int i = yStart; i <= yEnd; i++ ) {
-		for( int j = xStart; j <= xEnd; j++ ) { //loop over pixels in img
+	for ( int i = yStart; i < yEnd; i++ ) {
+		for( int j = xStart; j < xEnd; j++ ) { //loop over pixels in img
 
 			if ((int) canny_img.at<uchar>(i, j) == 255) { 				// if canny detects an edge here
 				for (int r = minRadius; r <= maxRadius; r++) {
