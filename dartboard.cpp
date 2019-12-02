@@ -36,7 +36,7 @@ Rect dart1_ground[] = {Rect(196, 128, 198, 190)};
 Rect dart2_ground[] = {Rect(106, 96, 86, 87)};
 Rect dart3_ground[] = {Rect(330, 150, 60, 66)};
 Rect dart4_ground[] = {Rect(202, 94, 183, 205)};
-Rect dart5_ground[] = {Rect(434, 143, 97, 11)};
+Rect dart5_ground[] = {Rect(428, 137, 120, 121)};
 Rect dart6_ground[] = {Rect(214, 119, 62, 62)};
 Rect dart7_ground[] = {Rect(253, 172, 144, 144)};
 Rect dart8_ground[] = {Rect(64, 252, 67, 88), Rect(850, 216, 103, 120)};
@@ -44,7 +44,7 @@ Rect dart9_ground[] = {Rect(203, 61, 231, 217)};
 Rect dart10_ground[] = {Rect(96, 105, 91, 109), Rect(585, 128, 56, 84), Rect(919, 148, 32, 66)};
 Rect dart11_ground[] = {Rect(175, 105, 62, 67)};
 Rect dart12_ground[] = {Rect(150, 76, 68, 139)};
-Rect dart13_ground[] = {Rect(273, 128, 129, 124)};
+Rect dart13_ground[] = {Rect(270, 117, 133, 136)};
 Rect dart14_ground[] = {Rect(121, 103, 125, 124), Rect(989, 96, 120, 123)};
 Rect dart15_ground[] = {Rect(151, 59, 138, 139)};
 // --------------------------------------------------------------------------------------------------
@@ -54,8 +54,8 @@ String cascade_name = "dartcascade/cascade.xml";
 CascadeClassifier cascade;
 
 // these must be changed when using a different file
-int lengthGT = sizeof(dart1_ground)/sizeof(dart1_ground[0]);
-Rect GTArray[sizeof(dart1_ground)/sizeof(dart1_ground[0])] = dart1_ground;
+int lengthGT = sizeof(dart15_ground)/sizeof(dart15_ground[0]);
+Rect GTArray[sizeof(dart15_ground)/sizeof(dart15_ground[0])] = dart15_ground;
 const float thresholdForCalculations = 0.45;
 
 std::unordered_map<int, int> chosenboards; // index of chosen face, index of GT which chose face
@@ -142,7 +142,8 @@ float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
 
 // Cull the younglings
 float calculateTpr() {
-	int truePositives = 0;
+	float truePositives = 0;
+	float len = lengthGT;
 	for (int i = 0; i < lengthGT; i++) {
 		if (GT_IOU_values[i] > thresholdForCalculations) truePositives++;
 	}
@@ -261,7 +262,7 @@ int detectAndDisplay( Mat frame ) {
 	for (int i = 0; i < rejected_viola_boards.size(); i++) { // if board has enough lines, add to detectedBoards
 		int hough_line_threshold = 0;
 		if (detectedBoards.empty()) hough_line_threshold = (rejected_viola_boards[i].area()/4544) + 30;
-		else hough_line_threshold = (rejected_viola_boards[i].area()/5000) + 60;
+		else hough_line_threshold = (rejected_viola_boards[i].area()/5000) + 70;
 		int line_count = hough_lines(canny_img, rejected_viola_boards[i], directionImg, lines_image, hough_line_threshold);
 		if (line_count > 5) {
 			detectedBoards.push_back(rejected_viola_boards[i]);
