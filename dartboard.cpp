@@ -140,7 +140,7 @@ float calculateIOU(Rect detectedRectangle, Rect groundTruthRectangle) {
 	return (intersection / thisUnion);
 }
 
-// Cull the younglings
+// Returns the true positive rate
 float calculateTpr() {
 	float truePositives = 0;
 	float len = lengthGT;
